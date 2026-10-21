@@ -393,6 +393,8 @@ async def handle_completion(
     state: Any,
     model_sampling: dict[str, Any],
 ):
+    if req.n != 1:
+        return create_error_response("Only n=1 is supported", param="n")
     unsupported = _completion_unsupported_reason(req)
     if unsupported is not None:
         return create_error_response(unsupported)
