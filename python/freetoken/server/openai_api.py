@@ -393,6 +393,8 @@ async def handle_completion(
     state: Any,
     model_sampling: dict[str, Any],
 ):
+    if isinstance(req.prompt, list) and not req.prompt:
+        return create_error_response("prompt must not be empty", param="prompt")
     unsupported = _completion_unsupported_reason(req)
     if unsupported is not None:
         return create_error_response(unsupported)
@@ -439,7 +441,7 @@ async def handle_completion(
         finish_reason = "stop"
         async for ack in state.wait_for_ack(uid):
             if getattr(ack, "error", None):
-                return create_error_response(ack.error)
+                return create_error_response(ack.error, code=getattr(ack, "error_code", None))
             prompt_tokens += ack.prompt_tokens_delta
             completion_tokens += ack.completion_tokens_delta
             cached_tokens += ack.cached_tokens
@@ -466,7 +468,7 @@ async def stream_completion_chunks(uid: int, req: CompletionRequest, state: Any)
     finish_reason = "stop"
     async for ack in state.wait_for_ack(uid):
         if getattr(ack, "error", None):
-            yield _sse({"error": {"message": ack.error, "type": "invalid_request_error", "code": None}})
+            yield _sse({"error": {"message": ack.error, "type": "invalid_request_error", "code": getattr(ack, "error_code", None)}})
             yield b"data: [DONE]\n\n"
             return
         prompt_tokens += ack.prompt_tokens_delta
