@@ -339,6 +339,52 @@ def test_tool_choice_none_keeps_tool_tags_as_content():
     assert choice["message"] == {"role": "assistant", "content": output}
 
 
+def test_completion_rejects_empty_prompt_list():
+    for stream in (False, True):
+        state = FakeState([])
+        response = run(
+            handle_completion(
+                CompletionRequest(model="client-model", prompt=[], stream=stream),
+                request=None,
+                state=state,
+                model_sampling={},
+            )
+        )
+        assert response.status_code == 400
+        assert json.loads(response.body)["error"]["param"] == "prompt"
+        assert state.sent is None
+
+
+def test_completion_preserves_error_code_in_stream_and_nonstream():
+    reply = UserReply(
+        uid=42,
+        incremental_output="",
+        finished=True,
+        error="prompt exceeds context",
+        error_code="context_length_exceeded",
+    )
+    for stream in (False, True):
+        state = FakeState([reply])
+        response = run(
+            handle_completion(
+                CompletionRequest(model="client-model", prompt="hello", stream=stream),
+                request=None,
+                state=state,
+                model_sampling={},
+            )
+        )
+        if stream:
+            async def consume():
+                return [chunk async for chunk in response.body_iterator]
+
+            events = parse_sse(run(consume()))
+            assert events[0]["error"]["code"] == "context_length_exceeded"
+            assert events[-1] == "[DONE]"
+        else:
+            assert response.status_code == 400
+            assert json.loads(response.body)["error"]["code"] == "context_length_exceeded"
+
+
 def test_completion_rejects_token_id_prompts():
     state = FakeState([])
     response = run(
