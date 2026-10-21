@@ -339,6 +339,25 @@ def test_tool_choice_none_keeps_tool_tags_as_content():
     assert choice["message"] == {"role": "assistant", "content": output}
 
 
+def test_completion_rejects_unsupported_choice_counts():
+    for stream in (False, True):
+        for n in (0, 2, 3):
+            state = FakeState([])
+            response = run(
+                handle_completion(
+                    CompletionRequest(model="client-model", prompt="hi", n=n, stream=stream),
+                    request=None,
+                    state=state,
+                    model_sampling={},
+                )
+            )
+            assert response.status_code == 400
+            body = json.loads(response.body)
+            assert body["error"]["param"] == "n"
+            assert body["error"]["message"] == "Only n=1 is supported"
+            assert state.sent is None
+
+
 def test_completion_rejects_token_id_prompts():
     state = FakeState([])
     response = run(
